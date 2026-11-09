@@ -247,7 +247,7 @@ else:
                 st.error(f"Error processing image: {e}")
 
         else:
-            st.info("👈 Upload an image on the left to see the analysis, safety warnings, and product alternatives appear here instantly!")
+            st.info("👈 Upload an image to see the analysis, safety warnings, and product alternatives appear here instantly!")
 
 
 # ---------------------------------------------- 2nd ----------------------------------------------
