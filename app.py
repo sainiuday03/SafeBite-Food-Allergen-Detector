@@ -16,8 +16,6 @@ from ml_allergen import ml_suspects
 if os.name == "nt":   # only on Windows; a Linux server finds Tesseract by itself
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-st.caption("Prototype for educational use. Not medical advice - always read the pack. "
-           "Label photos are sent to Google's Gemini API for product recognition.")
 init_db()
 
 
