@@ -10,5 +10,3 @@ Upload a photo of a food label. SafeBite reads it with OCR, checks it against yo
 1. Install Tesseract OCR and `pip install -r requirements.txt`
 2. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and add your Gemini key
 3. `streamlit run app.py`
-
-*Prototype for educational use. Not medical advice - always read the pack.*
