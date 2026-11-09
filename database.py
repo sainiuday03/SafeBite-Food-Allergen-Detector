@@ -1,10 +1,13 @@
 import hashlib
 import hmac
 import os
+import secrets
 import sqlite3
+import time
 
 DB = 'users.db'
 ITERATIONS = 200_000
+SESSION_DAYS = 7
 
 
 def _hash(password, salt=None):
@@ -31,6 +34,7 @@ def init_db():
             allergies TEXT NOT NULL
         )
     ''')
+    cursor.execute('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, expires REAL NOT NULL)')
     conn.commit()
     conn.close()
 
@@ -71,3 +75,34 @@ def update_user_allergies(username, new_allergies_list):
     conn.commit()
     conn.close()
     return True
+
+
+
+# --- login sessions: a random token kept in the page URL lets the user stay logged in after a reload ---
+def create_session(username):
+    token = secrets.token_urlsafe(32)
+    conn = sqlite3.connect(DB)
+    conn.execute('DELETE FROM sessions WHERE expires < ?', (time.time(),))
+    conn.execute('INSERT INTO sessions (token, username, expires) VALUES (?, ?, ?)',
+                 (token, username, time.time() + SESSION_DAYS * 86400))
+    conn.commit()
+    conn.close()
+    return token
+
+
+def get_session_user(token):
+    """Returns (username, allergies) for a valid, unexpired token, else None."""
+    if not token:
+        return None
+    conn = sqlite3.connect(DB)
+    row = conn.execute('SELECT u.username, u.allergies FROM sessions s JOIN users u ON u.username = s.username '
+                       'WHERE s.token = ? AND s.expires > ?', (token, time.time())).fetchone()
+    conn.close()
+    return (row[0], row[1].split(',') if row[1] else []) if row else None
+
+
+def delete_session(token):
+    conn = sqlite3.connect(DB)
+    conn.execute('DELETE FROM sessions WHERE token = ?', (token,))
+    conn.commit()
+    conn.close()

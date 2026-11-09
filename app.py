@@ -8,8 +8,9 @@ import pytesseract
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="SafeBite", page_icon="🍃", layout="wide")
 
-from database import init_db, register_user, authenticate_user, update_user_allergies
-from recommendations import analyze_allergens, get_safe_alternatives, LAST_STATUS
+from database import (init_db, register_user, authenticate_user, update_user_allergies,
+                      create_session, get_session_user, delete_session)
+from recommendations import analyze_allergens, get_safe_alternatives, gemini_transcribe, LAST_STATUS
 from ocr_engine import read_label
 from ml_allergen import ml_suspects
 
@@ -22,7 +23,7 @@ init_db()
 @st.cache_data(show_spinner=False, max_entries=20)
 def cached_ocr(image_bytes):
     """OCR runs once per photo; clicking other buttons no longer repeats it."""
-    return read_label(Image.open(io.BytesIO(image_bytes)))
+    return read_label(Image.open(io.BytesIO(image_bytes)), fallback=gemini_transcribe)
 
 
 @st.cache_data(show_spinner=False, max_entries=50)
@@ -99,6 +100,15 @@ if 'current_user' not in st.session_state:
 if 'user_allergies' not in st.session_state:
     st.session_state.user_allergies = []
 
+# Stay logged in after a reload / browser switch: the login token is kept in the page address (?s=...)
+if not st.session_state.logged_in:
+    restored = get_session_user(st.query_params.get("s"))
+    if restored:
+        st.session_state.logged_in = True
+        st.session_state.current_user, st.session_state.user_allergies = restored
+    elif "s" in st.query_params:
+        del st.query_params["s"]
+
 # --- AUTHENTICATION SCREEN ---
 if not st.session_state.logged_in:
     st.markdown('<p class="main-title">SafeBite🍃</p>', unsafe_allow_html=True)
@@ -111,6 +121,7 @@ if not st.session_state.logged_in:
         with st.form("register_form"):
             reg_username = st.text_input("Choose Username:")
             reg_password = st.text_input("Choose Password:", type="password")
+            st.caption("Tip: use a unique password you do not use on any other site.")
             st.write("**Select your allergens:**")
             
             col1, col2 = st.columns(2)
@@ -141,6 +152,7 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.current_user = login_user.strip()
                     st.session_state.user_allergies = allergies
+                    st.query_params["s"] = create_session(login_user.strip())
                     st.rerun()
                 else:
                     st.error("Invalid credentials.")
@@ -170,6 +182,8 @@ else:
                 
     st.sidebar.divider()
     if st.sidebar.button("Log Out"):
+        delete_session(st.query_params.get("s", ""))
+        st.query_params.clear()
         st.session_state.logged_in = False
         st.session_state.current_user = ""
         st.session_state.user_allergies = []
@@ -209,6 +223,8 @@ else:
 
                 if not extracted_text.strip():
                     st.warning("No text could be read from this photo. Please retake it closer, flatter and in better light.", icon="📷")
+                    if ocr.get("error"):
+                        st.error(f"OCR problem (send this to the developer): {ocr['error']}")
                     st.stop()
                 if ocr["confidence"] < 55 or ocr["words"] < 25:
                     st.warning("The label was hard to read, so this result may be incomplete. A clearer photo of the "
@@ -247,7 +263,7 @@ else:
                 st.error(f"Error processing image: {e}")
 
         else:
-            st.info("👈 Upload an image to see the analysis, safety warnings, and product alternatives appear here instantly!")
+            st.info("👈 Upload an image on the left to see the analysis, safety warnings, and product alternatives appear here instantly!")
 
 
 # ---------------------------------------------- 2nd ----------------------------------------------

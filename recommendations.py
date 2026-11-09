@@ -297,6 +297,30 @@ Return ONLY JSON: {{"brand": "...", "product_name": "...", "category": "..."}}""
     return None
 
 
+def gemini_transcribe(image):
+    """Backup OCR: asks Gemini to copy the text printed on the label. Used only if Tesseract fails or reads almost nothing."""
+    global _working_model
+    try:
+        data = _image_bytes(image, 1600)
+    except Exception:
+        return ""
+    prompt = ("Transcribe all the text printed on this food label exactly as written, including the ingredient list and any "
+              "allergen, 'contains' or 'may contain' statements. Return only the text, nothing else.")
+    for model in ([_working_model] if _working_model else []) + PREFERRED_MODELS:
+        try:
+            resp = get_client().models.generate_content(
+                model=model,
+                contents=[types.Part.from_bytes(data=data, mime_type="image/jpeg"), prompt],
+                config=types.GenerateContentConfig(temperature=0.0))
+            text = (resp.text or "").strip()
+            if text:
+                _working_model = model
+                return text
+        except Exception:                                 # noqa: BLE001
+            continue
+    return ""
+
+
 def determine_category(image, extracted_text):
     """Vision first, text rules as backup. Records how the decision was made."""
     rule_cat = deduce_product_category(extracted_text)

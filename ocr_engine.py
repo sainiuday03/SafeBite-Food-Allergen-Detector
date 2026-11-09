@@ -75,8 +75,8 @@ def _ocr(img, psm):
     return text, (sum(confs) / len(confs) if confs else 0.0), len(confs)
 
 
-def read_label(image):
-    """Main entry point. Returns {'text', 'confidence', 'words', 'passes', 'seconds', 'error'}."""
+def read_label(image, fallback=None):
+    """Main entry point. fallback(img)->text is a backup reader used if Tesseract reads almost nothing. Returns {'text', 'confidence', 'words', 'passes', 'seconds', 'error'}."""
     start = time.time()
     out = {"text": "", "confidence": 0.0, "words": 0, "passes": [], "seconds": 0.0, "error": None}
     try:
@@ -109,6 +109,16 @@ def read_label(image):
             if (name == "adaptive" and weak) or (name == "inverted" and (dark or (weak and best_conf < 60))):
                 run(name, fn, psm)
         out.update(text="\n".join(texts), confidence=round(best_conf, 1), words=total_words)
+
+        if len("".join(texts).strip()) < 25 and fallback is not None:          # Tesseract failed or found no text
+            try:
+                backup = (fallback(img) or "").strip()
+            except Exception as e:
+                backup = ""
+                out["error"] = f"{out['error'] or ''} | backup reader: {e}".strip(" |")
+            if len(backup) > 25:
+                out.update(text=backup, confidence=80.0, words=len(backup.split()))
+                out["passes"].append(("gemini-backup", 80.0, len(backup.split())))
     except Exception as e:
         out["error"] = str(e)
     out["seconds"] = round(time.time() - start, 1)
